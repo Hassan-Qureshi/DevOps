@@ -1,0 +1,23 @@
+[
+    {
+      "ParameterKey": "KeyName",
+      "ParameterValue": ""
+    }, 
+    {
+        "ParameterKey": "SubnetId",
+        "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "AmiId",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "SecurityGroup",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "EC2IamRole",
+      "ParameterValue": ""
+    }
+      
+  ]

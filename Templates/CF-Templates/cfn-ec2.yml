@@ -1,0 +1,169 @@
+# @author: Ali Hassan Qureshi
+# @since: Mar 15, 2021
+# @description: EC2-Ubuntu provisioning with CW alarms
+# @command: In order to run this template run the following command
+# > aws cloudformation create-stack  --stack-name xiq-dev-ec2-cw-enabled --template-body file://cfn-ec2.yml --parameters file://parameters.json --capabilities CAPABILITY_NAMED_IAM
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: "EC2 with CW Alarms"
+Parameters:
+  Owner:
+    Type: String
+    Default: DevOps    
+
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues: 
+      - dev
+      - prod
+      - uat
+    Description: Environment name for this stack
+
+  AvailabilityZone:
+    Default: us-west-2a
+    Description: Availability zone of EC2 instance
+    Type: String
+    MinLength: 10
+    MaxLength: 10
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9-]*"
+    ConstraintDescription: must begin with a letter and contain alphanumeric characters or hyphens.   
+
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t3.micro
+      - t3.nano
+      - t3.small
+      - t3.medium
+      - t3.large
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+
+  Ec2Name:
+    Type: String
+    # AllowedPattern: '[A-Za-z0-9]+'
+    Default: 'company-dev-newInstance'
+    ConstraintDescription: Must only contain letters and numbers between 5 and 30 characters
+    MinLength: 5
+    MaxLength: 30
+    Description: >-
+      Name of the EC2 instance. Must follow xiQ resource creation standards. For more
+      information see
+  Ec2Description:
+    Type: String
+    AllowedPattern: '^[\w ]+$'
+    Default: New EC2 instance created by CF Template
+    ConstraintDescription: must only contain letters and numbers
+    Description: Description of the instance
+  # VpcId:
+  #   Type: AWS::EC2::VPC::Id
+  #   Description: VpcId of your existing Virtual Private Cloud (VPC)
+  #   ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
+  # SubnetId:
+  #   Type: AWS::EC2::Subnet::Id
+  #   Description: SubnetId of an existing subnet (for the primary network) in your
+  #     Virtual Private Cloud (VPC)
+  #   ConstraintDescription: must be an existing subnet in the selected Virtual Private
+  #     Cloud.
+  # AmiId:
+  #   Description: Latest AMI ID
+  #   Type:  'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+  #   Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+  SubnetId:
+    Type: String
+    
+  AmiId:
+    Description: Existing AMI ID
+    Type:  String
+    
+  KeyName: 
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  SecurityGroup:
+    Type: String
+    Description: Security Group
+    
+  EC2IamRole:
+    Type: String
+    Description: IAM Role for ec2
+    
+Resources:
+  EC2InstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      InstanceProfileName: !Sub 'EC2-${Env}-InstanceProfile'
+      Path: "/"
+      Roles:
+        - 
+          Ref: "EC2IamRole"
+
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties: 
+      Domain: vpc
+      InstanceId: !Ref EC2Instance
+      Tags: 
+        - Key: "Name"
+          Value: "EC2-EIP"
+        - Key: "Owner"
+          Value: !Ref Owner
+
+  Ec2EipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    DependsOn:  EIP
+    Properties:
+      # AllocationId: !GetAtt EIP.AllocationId
+      InstanceId: !Ref EC2Instance
+      EIP: !Ref EIP
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      ImageId: !Ref AmiId
+
+      SecurityGroupIds: [!Ref 'SecurityGroup']
+      SubnetId: 
+        !Ref SubnetId
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      # SecurityGroupIds:
+      #   - !Ref SecurityGroup
+
+      # SubnetId: !Select 
+      #   - 0
+      #   - !Ref SubnetId
+
+      Tags:
+        - Key: Name
+          Value: !Ref Ec2Name
+        - Key: Description
+          Value: !Ref Ec2Description
+        - Key: Owner
+          Value: !Ref Owner
+
+      UserData: !Base64
+        'Fn::Join':
+          - ' '
+          - - |
+              #!/bin/bash -x 
+            - |+
+              exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+              echo IyEvYmluL2Jhc2ggLXhlCgplY2hvICdEb3dubG9hZGluZyBhbmQgaW5zdGFsbGluZyBDbG91ZHdhdGNoIEFnZW50Jwp3Z2V0IGh0dHBzOi8vczMuYW1hem9uYXdzLmNvbS9hbWF6b25jbG91ZHdhdGNoLWFnZW50L3VidW50dS9hbWQ2NC9sYXRlc3QvYW1hem9uLWNsb3Vkd2F0Y2gtYWdlbnQuZGViIC1PIC90bXAvYW1hem9uLWNsb3Vkd2F0Y2gtYWdlbnQuZGViCnN1ZG8gZHBrZyAtaSAtRSAvdG1wL2FtYXpvbi1jbG91ZHdhdGNoLWFnZW50LmRlYgplY2hvICdJbnN0YWxsYXRpb24gb2YgQ1cgYWdlbnQgRmluaXNoZWQnCmVjaG8gJz09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09JwpzdWRvIC9vcHQvYXdzL2FtYXpvbi1jbG91ZHdhdGNoLWFnZW50L2Jpbi9hbWF6b24tY2xvdWR3YXRjaC1hZ2VudC1jdGwgLWEgZmV0Y2gtY29uZmlnIC1tIGVjMiAtcyAtYyBzc206QW1hem9uQ2xvdWRXYXRjaC1Db25maWctVWJ1bnR1CmVjaG8gJz09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09JwpzdWRvIGFwdC1nZXQgdXBkYXRlIC15CnN1ZG8gYXB0LWdldCBpbnN0YWxsIHJ1YnktZnVsbCAteQpzdWRvIGFwdC1nZXQgaW5zdGFsbCB3Z2V0IC15CnN1ZG8gYXB0LWdldCBpbnN0YWxsIC15IHB5dGhvbjMtcGlwCgpzdWRvIGFwdCBpbnN0YWxsIC15IGF3c2NsaQoKZWNobyAnPT09PT09PT09PT09PT09PUNMT1VEV0FUQ0gtU1RBVFVTPT09PT09PT09PT09PT09PT09PT09PT09JwpzdWRvIC9vcHQvYXdzL2FtYXpvbi1jbG91ZHdhdGNoLWFnZW50L2Jpbi9hbWF6b24tY2xvdWR3YXRjaC1hZ2VudC1jdGwgLW0gZWMyIC1hIHN0YXR1cwplY2hvICc9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0nCgpFQzJfQVZBSUxfWk9ORT1gY3VybCAtcyBodHRwOi8vMTY5LjI1NC4xNjkuMjU0L2xhdGVzdC9tZXRhLWRhdGEvcGxhY2VtZW50L2F2YWlsYWJpbGl0eS16b25lYApFQzJfUkVHSU9OPSJgZWNobyBcIiRFQzJfQVZBSUxfWk9ORVwiIHwgc2VkICdzL1thLXpdJC8vJ2AiCndnZXQgaHR0cHM6Ly9hd3MtY29kZWRlcGxveS0ke0VDMl9SRUdJT059LnMzLmFtYXpvbmF3cy5jb20vbGF0ZXN0L2luc3RhbGwKc3VkbyBjaG1vZCAreCAuL2luc3RhbGwKc3VkbyAuL2luc3RhbGwgYXV0bwpzdWRvIHNlcnZpY2UgY29kZWRlcGxveS1hZ2VudCBzdGFydApzdWRvIHNlcnZpY2UgY29kZWRlcGxveS1hZ2VudCBzdGF0dXMK | base64 -d > /home/ubuntu/bootstrap.sh
+              chmod 755 /home/ubuntu/bootstrap.sh
+            - sudo -H -u root /home/ubuntu/bootstrap.sh
+            - 2>&1 | tee /home/ubuntu/bootstrap.log
+
+           
+Outputs:
+  Instance:
+    Value: !GetAtt [EC2Instance, PublicDnsName]
+    Description: DNS Name of the newly created EC2 instance
+  

@@ -18,6 +18,10 @@
     {
       "ParameterKey": "EC2IamRole",
       "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "AlarmSnsTopic",
+      "ParameterValue": ""
     }
       
   ]
